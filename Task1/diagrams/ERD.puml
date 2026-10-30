@@ -1,0 +1,256 @@
+@startuml
+title FinUnion + RetailBank: Концептуальная ER-модель (Logical Data Model)
+
+skinparam linetype ortho
+
+' Сущности
+
+entity "Клиент (Party)" as Party {
+  * party_id : UUID
+  --
+  party_type : Enum (ФЛ/ЮЛ/ИП)
+  full_name : String
+  inn : String
+  passport : String
+  ogrn : String
+  phone : String
+  email : String
+  segment : String
+}
+
+entity "Договор (Contract)" as Contract {
+  * contract_id : UUID
+  --
+  party_id : UUID
+  product_id : UUID
+  contract_type : String
+  start_date : Date
+  end_date : Date
+  status : String
+}
+
+entity "Счёт (Account)" as Account {
+  * account_id : UUID
+  --
+  party_id : UUID
+  contract_id : UUID
+  branch_id : UUID
+  account_number : String
+  account_type : String
+  currency : String
+  balance : Decimal
+  status : String
+  open_date : Date
+}
+
+entity "Карта (Card)" as Card {
+  * card_id : UUID
+  --
+  account_id : UUID
+  party_id : UUID
+  card_number_masked : String
+  card_type : String
+  payment_system : String
+  expiry_date : Date
+  status : String
+}
+
+entity "Кредит (Loan)" as Loan {
+  * loan_id : UUID
+  --
+  party_id : UUID
+  contract_id : UUID
+  amount : Decimal
+  rate : Decimal
+  term : Int
+  remaining : Decimal
+  status : String
+  issue_date : Date
+}
+
+entity "Транзакция (Transaction)" as Transaction {
+  * transaction_id : UUID
+  --
+  account_id : UUID
+  card_id : UUID
+  amount : Decimal
+  currency : String
+  type : String
+  datetime : DateTime
+  status : String
+}
+
+entity "Платёж (Payment)" as Payment {
+  * payment_id : UUID
+  --
+  from_account_id : UUID
+  to_account_id : UUID
+  loan_id : UUID
+  amount : Decimal
+  currency : String
+  type : String
+  status : String
+  date : Date
+}
+
+entity "Продукт (Product)" as Product {
+  * product_id : UUID
+  --
+  name : String
+  type : String
+  category : String
+  status : String
+}
+
+entity "Обращение (Request)" as Request {
+  * request_id : UUID
+  --
+  party_id : UUID
+  branch_id : UUID
+  type : String
+  channel : String
+  status : String
+  date : Date
+  description : Text
+}
+
+entity "Справочник (Reference Data)" as Reference {
+  * reference_id : UUID
+  --
+  type : String
+  code : String
+  value : String
+  status : String
+}
+
+entity "Согласие (Consent)" as Consent {
+  * consent_id : UUID
+  --
+  party_id : UUID
+  consent_type : String
+  issue_date : Date
+  revoke_date : Date
+  status : String
+}
+
+entity "Скоринг (Risk Score)" as Risk {
+  * risk_id : UUID
+  --
+  party_id : UUID
+  loan_id : UUID
+  score : Int
+  model : String
+  calc_date : Date
+  status : String
+}
+
+entity "Документ (Document)" as Document {
+  * document_id : UUID
+  --
+  party_id : UUID
+  contract_id : UUID
+  doc_type : String
+  doc_number : String
+  issue_date : Date
+  file_ref : String
+  status : String
+}
+
+entity "Офис (Branch)" as Branch {
+  * branch_id : UUID
+  --
+  name : String
+  address : String
+  region : String
+  status : String
+}
+
+entity "Тариф (Tariff)" as Tariff {
+  * tariff_id : UUID
+  --
+  product_id : UUID
+  name : String
+  terms : Text
+  rate : Decimal
+  fee : Decimal
+  status : String
+}
+
+' Связи
+
+Party ||--o{ Contract : "1:N (имеет договоры)"
+Party ||--o{ Account : "1:N (имеет счета)"
+Party ||--o{ Card : "1:N (имеет карты)"
+Party ||--o{ Loan : "1:N (имеет кредиты)"
+Party ||--o{ Request : "1:N (имеет обращения)"
+Party ||--o{ Consent : "1:N (имеет согласия)"
+Party ||--o{ Document : "1:N (имеет документы)"
+Party ||--o{ Risk : "1:N (имеет скоринг)"
+
+' Договор
+Contract }o--|| Party : "N:1"
+Contract }o--|| Product : "N:1 (на продукт)"
+Contract ||--o{ Account : "1:N (порождает счета)"
+Contract ||--o{ Loan : "1:N (порождает кредиты/транши)"
+Contract ||--o{ Document : "1:N (имеет документы)"
+
+' Счёт
+Account }o--|| Party : "N:1"
+Account }o--|| Contract : "N:1"
+Account }o--|| Branch : "N:1 (в офисе)"
+Account ||--o{ Card : "1:N (выпущены карты)"
+Account ||--o{ Transaction : "1:N (транзакции)"
+
+' Карта
+Card }o--|| Account : "N:1"
+Card }o--|| Party : "N:1"
+Card ||--o{ Transaction : "1:N (транзакции)"
+
+' Кредит
+Loan }o--|| Party : "N:1"
+Loan }o--|| Contract : "N:1"
+Loan ||--o{ Payment : "1:N (погашения)"
+Loan ||--|| Risk : "1:1 (скоринг при выдаче)"
+
+' Транзакция
+Transaction }o--|| Account : "N:1"
+Transaction }o--|| Card : "N:1"
+
+' Платёж
+Payment }o--|| Account : "N:1 (источник)"
+Payment }o--|| Account : "N:1 (получатель)"
+Payment }o--|| Loan : "N:1 (погашение)"
+
+' Продукт
+Product ||--o{ Contract : "1:N (в договорах)"
+Product ||--o{ Tariff : "1:N (тарифы)"
+
+' Обращение
+Request }o--|| Party : "N:1"
+Request }o--|| Branch : "N:1"
+
+' Согласие
+Consent }o--|| Party : "N:1"
+
+' Скоринг
+Risk }o--|| Party : "N:1"
+Risk ||--|| Loan : "1:1"
+
+' Документ
+Document }o--|| Party : "N:1"
+Document }o--|| Contract : "N:1"
+
+' Офис
+Branch ||--o{ Account : "1:N"
+Branch ||--o{ Request : "1:N"
+
+' Тариф
+Tariff }o--|| Product : "N:1"
+
+
+note bottom of Reference
+  Справочник используется многими сущностями
+  (Продукт, Клиент, Счёт) как атрибут.
+end note
+
+@enduml
