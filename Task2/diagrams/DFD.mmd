@@ -1,0 +1,92 @@
+flowchart TB
+    %% внешние акторы
+    ClientFU["Клиент FinUnion"]
+    ClientRB["Клиент RetailBank\n(старый)"]
+    EmployeeFU["Сотрудник FinUnion"]
+    EmployeeRB["Сотрудник RetailBank"]
+    Analyst["Финансовый аналитик"]
+    Regulator["Регулятор"]
+
+    subgraph FU["FinUnion (мастер для новых продуктов)"]
+        FU_CRM(("FU CRM\n(мастер клиентов FU и новых)"))
+        FU_Core(("FU Core Banking\n(мастер новых счетов)"))
+        FU_Cards(("FU Card Processing\n(мастер новых карт)"))
+        FU_Loans(("FU Loan System\n(мастер новых кредитов)"))
+    end
+
+    subgraph RB["RetailBank (временный мастер для старых продуктов)"]
+        RB_CRM(("RB CRM\n(врем. мастер клиентов RB)"))
+        RB_Core(("RB Core Banking\n(врем. мастер старых счетов)"))
+        RB_Cards(("RB Card Processing\n(врем. мастер старых карт)"))
+        RB_Loans(("RB Loan System\n(врем. мастер старых кредитов)"))
+    end
+
+    subgraph INT["Integration Layer (сопоставление)"]
+        Integration(("Integration Layer\n- Identity Resolution (party_id)\n- валидация\n- дедупликация\n- сопоставление"))
+    end
+
+    subgraph ANALYTICS["Аналитический контур"]
+        DWH(("DWH\n(объединенная отчетность:\nFU + RB)"))
+        BI(("BI"))
+        DataHub(("DataHub\n(каталог, lineage)"))
+    end
+
+    ClientFU -->|"🟢 [Create]\nобращение"| FU_CRM
+    EmployeeFU -->|"🔵 [Read]/🟡 [Update]\nработа"| FU_CRM
+    FU_CRM -->|"🟢 [Create]/🟡 [Update]\nклиент, договор"| FU_Core
+    FU_CRM -->|"🟢 [Create]\nзаявка"| FU_Loans
+    FU_Core -->|"🟢 [Create]\nсчет, карта"| FU_Cards
+    FU_Core -->|"🟢 [Create]\nсчет, платеж"| FU_Loans
+
+    ClientRB -->|"🟢 [Create]\nобращение"| RB_CRM
+    EmployeeRB -->|"🔵 [Read]/🟡 [Update]\nработа"| RB_CRM
+    RB_CRM -->|"🟢 [Create]/🟡 [Update]\nклиент (старый)"| RB_Core
+    RB_CRM -->|"🟢 [Create]\nзаявка (старая)"| RB_Loans
+    RB_Core -->|"🟢 [Create]\nсчет (старый)"| RB_Cards
+    RB_Core -->|"🟢 [Create]\nсчет (старый)"| RB_Loans
+
+    RB_CRM -->|"🟢 [Create]/🟡 [Update]+🟠 [Validate]\nклиент"| Integration
+    Integration -->|"🟡 [Update]\nparty_id"| FU_CRM
+    FU_CRM -->|"🟢 [Create]\nновый кредит"| FU_Loans
+    FU_CRM -->|"🟢 [Create]\nновая карта"| FU_Cards
+    FU_CRM -->|"🟢 [Create]\nновый счет"| FU_Core
+
+    FU_Loans -->|"🔵 [Read]\nновые кредиты"| Integration
+    RB_Loans -->|"🔵 [Read]\nстарые кредиты"| Integration
+    FU_Cards -->|"🔵 [Read]\nновые карты"| Integration
+    RB_Cards -->|"🔵 [Read]\nстарые карты"| Integration
+    FU_Core -->|"🔵 [Read]\nновые счета"| Integration
+    RB_Core -->|"🔵 [Read]\nстарые счета"| Integration
+
+    FU_Core -->|"🔵 [Read]+🟢 [Create]\nbatch (новые счета)"| DWH
+    FU_Cards -->|"🔵 [Read]+🟢 [Create]\nbatch (новые карты)"| DWH
+    FU_Loans -->|"🔵 [Read]+🟢 [Create]\nbatch (новые кредиты)"| DWH
+    RB_Core -->|"🔵 [Read]+🟢 [Create]\nbatch (старые счета)"| DWH
+    RB_Cards -->|"🔵 [Read]+🟢 [Create]\nbatch (старые карты)"| DWH
+    RB_Loans -->|"🔵 [Read]+🟢 [Create]\nbatch (старые кредиты)"| DWH
+    Integration -->|"🟢 [Create]\nсопоставленные данные"| DWH
+
+    DWH -->|"🔵 [Read]+🟣 [Aggregate]\nвитрины"| BI
+    Analyst -->|"🔵 [Read]\nотчеты"| BI
+
+    DWH -->|"🔵 [Read]\nотчетность"| Regulator
+
+    FU_CRM -->|"🟢 [Create]\nметаданные"| DataHub
+    RB_CRM -->|"🟢 [Create]\nметаданные"| DataHub
+    Integration -->|"🟢 [Create]\nlineage"| DataHub
+    DWH -->|"🟢 [Create]\nметаданные"| DataHub
+
+    %% стилизация
+    classDef fuStyle fill:#87CEEB,stroke:#1565C0,stroke-width:2px
+    classDef rbStyle fill:#FFB6C1,stroke:#C62828,stroke-width:2px
+    classDef intStyle fill:#FFD700,stroke:#F57F17,stroke-width:2px
+    classDef analyticsStyle fill:#90EE90,stroke:#2E7D32,stroke-width:2px
+    classDef actorStyle fill:#FFFACD,stroke:#B8860B,stroke-width:2px
+    classDef externalStyle fill:#D3D3D3,stroke:#666666,stroke-width:2px
+
+    class FU_CRM,FU_Core,FU_Cards,FU_Loans fuStyle
+    class RB_CRM,RB_Core,RB_Cards,RB_Loans rbStyle
+    class Integration intStyle
+    class DWH,BI,DataHub analyticsStyle
+    class ClientFU,ClientRB,EmployeeFU,EmployeeRB,Analyst actorStyle
+    class Regulator externalStyle
